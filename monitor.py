@@ -104,7 +104,7 @@ async def async_monitor_manager():
 
 if __name__ == "__main__":
     try:
-        logging.info("Starting Shadow Async Monitor (aioimaplib)...")
+        logging.info("Starting Async Monitor (aioimaplib)...")
         asyncio.run(async_monitor_manager())
     except KeyboardInterrupt:
         logging.info("Monitor stopped by user.")

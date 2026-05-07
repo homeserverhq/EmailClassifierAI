@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 echo "===================================================="
-echo "Starting main service..."
+echo "     Initializing database..."
+python /app/db_manager.py
+sleep 3
+echo "     Starting main service..."
 echo "===================================================="
 exec "$@"

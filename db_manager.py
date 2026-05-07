@@ -44,4 +44,3 @@ def get_active_accounts():
 
 if __name__ == "__main__":
     init_db()
-    print("Database initialized at", DB_PATH)
