@@ -1,0 +1,8 @@
+IMAPClient
+celery
+redis
+Flask
+sqlalchemy
+openai
+gunicorn
+aioimaplib
