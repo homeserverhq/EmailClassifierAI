@@ -107,4 +107,4 @@ This will spin up the Redis broker, the Celery workers, the Monitor service, and
 * **IMAP Security:** Always use `use_ssl=True` and port `993` for all production accounts.
 
 ## 📄 License
-[Specify your license, e.g., MIT]
+[GPL-3.0]
