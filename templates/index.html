@@ -38,47 +38,74 @@
                     <input type="password" id="add-password" name="password" placeholder="Password" required>
                     <input type="text" id="add-consume" name="consume_folder" placeholder="Consume Folder" required>
                     <input type="text" id="add-processed" name="processed_folder" placeholder="Processed Folder" required>
-                    <button type="submit" class="btn-primary">Add Account</button>
+                    <textarea id="add-prompt" name="prompt" class="prompt-textarea" placeholder="LLM Prompt">{{ default_prompt }}</textarea>
+                    <div class="form-footer">
+                        <button type="submit" class="btn-primary">Add Account</button>
+                        <label class="checkbox-label">
+                            Include parent folders?: <input type="checkbox" id="add-allow-parent" name="allow_parent" checked>
+                        </label>
+                    </div>
                 </form>
             </section>
 
             <section class="list-section">
                 <h2>Monitored Accounts</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th class="col-server">Server</th>
-                            <th class="col-user">User</th>
-                            <th>Password</th>
-                            <th>Consume</th>
-                            <th>Processed</th>
-                            <th style="width: 70px;">Delete</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="col-center" style="width: 60px;">Active</th>
+                                <th class="col-server">Server</th>
+                                <th class="col-user">User</th>
+                                <th class="col-center">Password</th>
+                                <th class="col-center">Consume</th>
+                                <th class="col-center">Processed</th>
+                                <th class="col-center">Include Parent</th>
+                                <th class="col-center" style="width: 70px;">Delete</th>
+                            </tr>
+                        </thead>
+                        <tbody>
                         {% for acc in accounts %}
                         <tr class="account-row" 
-                            data-id="{{ acc.id }}"
+                            data-uuid="{{ acc.uuid }}"
                             data-server="{{ acc.server }}" 
                             data-user="{{ acc.user }}" 
                             data-password="{{ acc.password }}" 
                             data-consume="{{ acc.consume_folder }}" 
-                            data-processed="{{ acc.processed_folder }}">
+                            data-processed="{{ acc.processed_folder }}"
+                            data-prompt="{{ acc.prompt }}"
+                            data-allow-parent="{{ acc.allow_parent }}"
+                            data-is-active="{{ acc.is_active }}">
+                            <td class="col-center active-cell">
+                                <span class="toggle-switch {{ 'active' if acc.is_active else '' }}"
+                                      onclick="handleToggle(this)"
+                                      data-uuid="{{ acc.uuid }}">
+                                    <span class="toggle-slider"></span>
+                                </span>
+                            </td>
                             <td class="col-server">{{ acc.server }}</td>
                             <td class="col-user">{{ acc.user }}</td>
-                            <td>••••••••</td>
-                            <td>{{ acc.consume_folder }}</td>
-                            <td>{{ acc.processed_folder }}</td>
+                            <td class="col-center">••••••••</td>
+                            <td class="col-center">{{ acc.consume_folder }}</td>
+                            <td class="col-center">{{ acc.processed_folder }}</td>
+                            <td class="col-center">{{ 'Yes' if acc.allow_parent else 'No' }}</td>
                             <td class="delete-cell">
                                 <button type="button" class="btn-delete-small" onclick="handleDelete(this)">Delete</button>
                             </td>
                         </tr>
                         {% endfor %}
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
             </section>
 
             <script>
+            async function handleToggle(el) {
+                const uuid = el.dataset.uuid;
+                const response = await fetch(`/toggle/${uuid}`, { method: 'POST' });
+                if (response.ok) {
+                    el.classList.toggle('active');
+                }
+            }
+
             async function handleDelete(button) {
                 const row = button.closest('.account-row');
                 
@@ -87,10 +114,13 @@
                 const pass = row.dataset.password;
                 const consume = row.dataset.consume;
                 const processed = row.dataset.processed;
-                const id = row.dataset.id;
+                const prompt = row.dataset.prompt;
+                const allowParent = row.dataset.allowParent;
+                const isActive = row.dataset.isActive;
+                const uuid = row.dataset.uuid;
 
                 if (confirm('Are you sure you want to delete this account?')) {
-                    const response = await fetch(`/delete/${id}`, {
+                    const response = await fetch(`/delete/${uuid}`, {
                         method: 'POST'
                     });
 
@@ -100,6 +130,8 @@
                         document.getElementById('add-password').value = pass;
                         document.getElementById('add-consume').value = consume;
                         document.getElementById('add-processed').value = processed;
+                        document.getElementById('add-prompt').value = prompt;
+                        document.getElementById('add-allow-parent').checked = allowParent === '1';
                         
                         row.remove();
                     } else {

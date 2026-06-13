@@ -13,6 +13,8 @@ The system monitors a designated "Consume" folder via IMAP, analyzes the content
 * **Dynamic Category Discovery:** No configuration needed for new categories. Simply create a new folder in your email client, and the system automatically learns it.
 * **Distributed Architecture:** Built on a Producer-Consumer model using **Celery** and **Redis**, allowing it to scale to hundreds of accounts across multiple worker nodes.
 * **Management Dashboard:** A Flask-based web interface to manage account credentials and monitor system health.
+* **Per-Account Prompt Customization:** Override the global LLM prompt template per email subscription directly from the web UI.
+* **Flexible Account Controls:** Enable or disable monitoring per account, and toggle whether parent folders are included as classification targets.
 
 ---
 
@@ -66,7 +68,7 @@ API_KEY=sk-your-openai-key
 API_BASE=https://api.openai.com/v1
 MODEL_NAME=gpt-4o
 
-# LLM Prompt Template (Optional - if not set, the system uses a default)
+# LLM Prompt Template (Optional - global default, overridable per account in the UI)
 # Use {categories}, {sender}, {subject}, and {body} as placeholders.
 LLM_PROMPT_TEMPLATE="Classify this email into EXACTLY ONE of these categories: {categories}. If it isn't a solid fit, respond with 'Uncategorized'. Return ONLY the category name.\n\nFrom: {sender}\nSubject: {subject}\n\nBody: {body}"
 
@@ -86,7 +88,14 @@ This will spin up the Redis broker, the Celery workers, the Monitor service, and
 ### 4. Managing Accounts
 1.  Access the Web UI at `http://localhost:5000`.
 2.  Log in using your `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
-3.  Add your IMAP accounts (Server, User, Password, Consume Folder, and Processed Folder).
+3.  Add your IMAP accounts with the following fields:
+
+    - **Server, User, Password** — IMAP connection details.
+    - **Consume / Processed Folder** — Source and destination folders.
+    - **LLM Prompt** — A per-account prompt template override. Leave blank to use the global default.
+    - **Include parent folders** — When enabled (default), parent folders are valid classification targets alongside their subfolders. Disable to restrict classification to only the deepest subfolders.
+
+    Each account also has an **Active toggle** in the table — disable it to pause monitoring without deleting the account.
 
 ---
 

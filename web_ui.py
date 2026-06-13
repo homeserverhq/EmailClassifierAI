@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
-from db_manager import get_active_accounts, init_db, add_account
+from db_manager import init_db, add_account, DEFAULT_PROMPT
 import sqlite3
 import os
 
@@ -44,7 +44,7 @@ def index():
     conn = get_db_connection()
     accounts = conn.execute('SELECT * FROM accounts').fetchall()
     conn.close()
-    return render_template('index.html', accounts=accounts)
+    return render_template('index.html', accounts=accounts, default_prompt=DEFAULT_PROMPT)
 
 @app.route('/add', methods=['POST'])
 def add():
@@ -54,41 +54,54 @@ def add():
         request.form.get('user'),
         request.form.get('password'),
         request.form.get('consume_folder'),
-        request.form.get('processed_folder')
+        request.form.get('processed_folder'),
+        request.form.get('prompt'),
+        1 if request.form.get('allow_parent') == 'on' else 0
     )
     flash('Account added successfully!', 'success')
     return redirect(url_for('index'))
 
-@app.route('/delete/<int:acc_id>', methods=['POST'])
-def delete(acc_id):
+@app.route('/delete/<string:acc_uuid>', methods=['POST'])
+def delete(acc_uuid):
     if not session.get('logged_in'): return redirect(url_for('login'))
     conn = get_db_connection()
-    conn.execute('DELETE FROM accounts WHERE id = ?', (acc_id,))
+    conn.execute('DELETE FROM accounts WHERE uuid = ?', (acc_uuid,))
     conn.commit()
     conn.close()
     flash('Account removed.', 'success')
     return redirect(url_for('index'))
 
-@app.route('/edit/<int:acc_id>', methods=['POST'])
-def edit(acc_id):
+@app.route('/edit/<string:acc_uuid>', methods=['POST'])
+def edit(acc_uuid):
     if not session.get('logged_in'): return redirect(url_for('login'))
     conn = get_db_connection()
     conn.execute('''
-        UPDATE accounts 
-        SET server=?, user=?, password=?, consume_folder=?, processed_folder=?
-        WHERE id=?
+        UPDATE accounts
+        SET server=?, user=?, password=?, consume_folder=?, processed_folder=?, prompt=?, allow_parent=?
+        WHERE uuid=?
     ''', (
         request.form.get('server'),
         request.form.get('user'),
         request.form.get('password'),
         request.form.get('consume_folder'),
         request.form.get('processed_folder'),
-        acc_id
+        request.form.get('prompt'),
+        1 if request.form.get('allow_parent') == 'on' else 0,
+        acc_uuid
     ))
     conn.commit()
     conn.close()
     flash('Account updated.', 'success')
     return redirect(url_for('index'))
+
+@app.route('/toggle/<string:acc_uuid>', methods=['POST'])
+def toggle(acc_uuid):
+    if not session.get('logged_in'): return ('', 401)
+    conn = get_db_connection()
+    conn.execute("UPDATE accounts SET is_active = CASE WHEN is_active THEN 0 ELSE 1 END WHERE uuid = ?", (acc_uuid,))
+    conn.commit()
+    conn.close()
+    return ('', 204)
 
 if __name__ == '__main__':
     # Ensure the DB is initialized in the volume location

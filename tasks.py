@@ -8,23 +8,24 @@ import re
 import shlex
 from celery import Celery
 
+from db_manager import DEFAULT_PROMPT
+from celery.signals import worker_process_init
+
 API_KEY = os.getenv("API_KEY")
 API_BASE = os.getenv("API_BASE")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o")
 
-DEFAULT_PROMPT = (
-    "Classify this email into EXACTLY ONE of these categories: {categories}. "
-    "If it isn't a solid fit, respond with 'Uncategorized'. Return ONLY the category name.\n\n"
-    "From: {sender}\n"
-    "Subject: {subject}\n\n"
-    "Body: {body}"
-)
 LLM_PROMPT_TEMPLATE = os.getenv("LLM_PROMPT_TEMPLATE", DEFAULT_PROMPT)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 app = Celery('email_tasks', broker=REDIS_URL)
 app.conf.worker_prefetch_multiplier = 1
 app.conf.task_acks_late = True
+
+@worker_process_init.connect
+def configure_worker_logging(**kwargs):
+    logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger('httpx').setLevel(logging.WARNING)
 
 client = OpenAI(
     api_key=API_KEY,
@@ -40,6 +41,9 @@ def process_email_task(self, account_config, email_msg_id):
     password = account_config['password']
     consume_folder = account_config['consume_folder']
     processed_folder = account_config['processed_folder']
+    per_account_prompt = account_config.get('prompt', '')
+    allow_parent = account_config.get('allow_parent', True)
+    logging.debug(f"WORKER allow_parent={allow_parent!r} type={type(allow_parent).__name__}")
     if not str(email_msg_id).isdigit():
         logging.error(f"Aborting task: Received invalid non-numeric UID '{email_msg_id}'")
         return
@@ -108,26 +112,33 @@ def process_email_task(self, account_config, email_msg_id):
             except Exception as e:
                 logging.debug(f"Error parsing folder string '{folder_str}': {e}")
         discovered_categories = list(category_to_full_path.keys())
+        logging.debug(f"FILTER: allow_parent={allow_parent!r} categories_before={discovered_categories}")
+        if not allow_parent:
+            parents = {c for c in discovered_categories
+                       if any(o.startswith(c + '.') for o in discovered_categories)}
+            discovered_categories = [c for c in discovered_categories if c not in parents]
+            logging.debug(f"FILTER: parents_removed={parents} categories_after={discovered_categories}")
         if 'Uncategorized' not in discovered_categories:
             discovered_categories.append('Uncategorized')
         if not discovered_categories:
             raise Exception(f"No valid categories found in {processed_folder}.")
         try:
-            prompt = LLM_PROMPT_TEMPLATE.format(
+            effective_template = per_account_prompt or LLM_PROMPT_TEMPLATE or DEFAULT_PROMPT
+            prompt = effective_template.format(
                 categories=', '.join(discovered_categories),
                 sender=sender,
                 subject=subject,
                 body=body[:1500]
             )
         except KeyError as e:
-            logging.error(f"LLM_PROMPT_TEMPLATE KeyError: Missing {e}. Using hardcoded default.")
+            logging.error(f"LLM prompt KeyError: Missing {e}. Using hardcoded default.")
             prompt = DEFAULT_PROMPT.format(
                 categories=', '.join(discovered_categories),
                 sender=sender,
                 subject=subject,
                 body=body[:1500]
             )
-        logging.debug(f"LLM Prompt: {prompt}")
+        logging.debug(f"LLM_PROMPT: {prompt}")
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
